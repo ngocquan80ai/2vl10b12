@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bài 12: Dự án nghiên cứu chuyển động ném xiên</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+
+    <script>
+        window.__mathjaxReady = false;
+        window.MathJax = {
+            startup: {
+                typeset: false,
+                ready: () => {
+                    MathJax.startup.defaultReady();
+                    window.__mathjaxReady = true;
+                    window.dispatchEvent(new Event('mathjax-ready'));
+                }
+            },
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true
+            },
+            chtml: { fontURL: 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2' }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        [v-cloak] { display: none; }
+        html, body { height: 100%; min-height: 100%; }
+        body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background: #e2e8f0;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .drag-item { cursor: grab; user-select: none; }
+        .drag-item:active { cursor: grabbing; }
+        
+        .fade-enter-active, .fade-leave-active { transition: opacity .25s ease, transform .25s ease; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; transform: translate(-50%, -12px); }
+        .tab-panel { min-height: 100%; }
+        
+        input[type="range"] { cursor: pointer; }
+        input[type="range"]:disabled { cursor: not-allowed; opacity: .55; }
+
+        /* Lớp chuẩn hóa văn bản đọc chống lộn xộn */
+        .readable {
+            line-height: 1.75;
+            text-wrap: pretty;
+            overflow-wrap: break-word;
+            word-break: break-word;
+        }
+        .compact-readable {
+            line-height: 1.55;
+            text-wrap: pretty;
+            overflow-wrap: break-word;
+        }
+        .note-card {
+            border-radius: 1rem;
+            padding: 1.25rem;
+            line-height: 1.7;
+            text-wrap: pretty;
+        }
+
+        /* Khung công thức độc lập chống vỡ layout ngang */
+        .formula-box {
+            overflow-x: auto;
+            overflow-y: hidden;
+            max-width: 100%;
+            border-radius: 0.85rem;
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            padding: 1rem 0.75rem;
+            text-align: center;
+        }
+
+        /* Cấu trúc nút trắc nghiệm an toàn bằng Flexbox */
+        .answer-option {
+            display: block;
+            width: 100%;
+            text-align: left;
+            border-radius: 0.9rem;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .answer-flex {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.85rem 1rem;
+            width: 100%;
+        }
+        .answer-letter {
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.25rem;
+            height: 2.25rem;
+            border-radius: 9999px;
+            font-weight: 900;
+            transition: all 0.2s ease;
+        }
+
+        @keyframes fireShake {
+            0% { transform: translate(0, 0); }
+            20% { transform: translate(-2px, 2px); }
+            40% { transform: translate(2px, -1px); }
+            60% { transform: translate(-1px, 1px); }
+            80% { transform: translate(1px, -2px); }
+            100% { transform: translate(0, 0); }
+        }
+        .animate-fire { animation: fireShake .28s ease-in-out; }
+        @keyframes pulseTarget {
+            0%, 100% { filter: drop-shadow(0 0 2px rgba(34,197,94,.5)); }
+            50% { filter: drop-shadow(0 0 14px rgba(34,197,94,1)); }
+        }
+        .target-glow { animation: pulseTarget 1.2s infinite; }
+    </style>
+</head>
+<body class="text-slate-800">
+<div id="app" v-cloak class="max-w-7xl mx-auto p-3 md:p-4 h-screen flex flex-col overflow-hidden relative">
+
+    <transition name="fade">
+        <div v-if="toast.show"
+             class="fixed top-5 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl shadow-2xl text-white font-bold text-center text-sm max-w-[92vw]"
+             :class="toast.isError ? 'bg-orange-600' : 'bg-emerald-600'">
+            <span v-html="toast.message"></span>
+        </div>
+    </transition>
+
+    <header class="bg-indigo-950 text-white p-4 rounded-t-2xl shadow-md flex justify-between items-center flex-shrink-0">
+        <div>
+            <h1 class="text-lg md:text-2xl font-black uppercase tracking-tight">Vật lí 10 - Bài 12: Chuyển động ném</h1>
+            <p class="text-xs md:text-sm opacity-90">Dự án nghiên cứu điều kiện góc ném tối ưu để đạt tầm bay xa lớn nhất</p>
+        </div>
+        <div class="hidden lg:block text-right text-indigo-200 text-xs font-semibold italic">
+            Xưởng nghiên cứu khoa học<br>Giải tích lượng giác & quỹ đạo Parabol
+        </div>
+    </header>
+
+    <nav class="bg-white shadow-md flex overflow-x-auto no-scrollbar rounded-b-2xl mb-4 flex-shrink-0">
+        <button v-for="(tab, index) in tabs" :key="tab"
+                type="button"
+                @click="changeTab(index + 1)"
+                class="min-w-[185px] md:min-w-0 md:flex-1 py-3 px-3 font-bold text-center border-b-4 transition-colors whitespace-nowrap text-xs md:text-sm cursor-pointer"
+                :class="activeTab === index + 1 ? 'border-indigo-700 text-indigo-800 bg-indigo-50' : 'border-transparent text-slate-600 hover:bg-slate-50'">
+            {{ tab }}
+        </button>
+    </nav>
+
+    <main class="flex-1 overflow-y-auto bg-white rounded-2xl shadow-md p-4 md:p-6 no-scrollbar relative">
+
+        <section v-show="activeTab === 1" class="tab-panel h-full flex flex-col gap-4">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b pb-3">
+                <div>
+                    <h2 class="readable text-lg md:text-xl font-black text-indigo-900">Tab 1 - Trò chơi “Pháo thủ căn góc bắn”</h2>
+                    <p class="readable text-xs md:text-sm italic text-slate-600 mt-1">
+                        Kéo thả hoặc bấm thẻ góc bắn vào buồng khai hỏa. Cùng một vận tốc $v_0$, hãy tìm góc giúp quả bóng đạt tầm xa lớn nhất.
+                    </p>
+                </div>
+                <button type="button" @click="resetTab1"
+                        class="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs rounded-lg shadow transition cursor-pointer flex-shrink-0">
+                    🔄 Làm lại tình huống
+                </button>
+            </div>
+
+            <div class="p-4 bg-slate-50 rounded-2xl min-h-[92px] flex flex-wrap justify-center gap-3 border-2 border-dashed border-slate-300 flex-shrink-0"
+                 @dragover.prevent @drop="dropAngle('source')">
+                <button v-for="card in sourceCards" :key="card.id"
+                        type="button"
+                        draggable="true"
+                        @dragstart="dragStart(card)"
+                        @click="playAngle(card)"
+                        class="drag-item bg-white border-2 border-indigo-500 text-indigo-900 font-black px-4 py-3 rounded-xl shadow-sm text-sm hover:bg-indigo-50 hover:-translate-y-0.5 transition">
+                    α = {{ card.val }}°
+                </button>
+                <div v-if="sourceCards.length === 0" class="text-emerald-700 font-bold italic text-sm self-center">
+                    Đã bắn đủ 3 góc. Nhấn “Làm lại tình huống” để thử lại.
+                </div>
+            </div>
+
+            <div class="flex-1 min-h-[320px] border rounded-2xl bg-slate-950 p-4 md:p-5 relative shadow-inner overflow-hidden flex flex-col">
+                <div class="flex flex-col md:flex-row gap-3 justify-between items-start relative z-10">
+                    <span class="text-[10px] md:text-xs font-black text-slate-500 uppercase tracking-widest">Trường bắn giả lập Unicode/SVG phẳng</span>
+                    <div class="w-full md:w-80 p-3 border-2 border-dashed rounded-xl text-center text-xs font-black bg-slate-900 transition-colors"
+                         :class="isFiring ? 'border-orange-500 text-orange-300 bg-orange-950/60' : 'border-indigo-400 text-indigo-300 bg-indigo-950/20'"
+                         @dragover.prevent @drop="dropAngle('cannon')">
+                        <span v-if="!isFiring">THẢ THẺ GÓC VÀO ĐÂY ĐỂ KHAI HỎA</span>
+                        <span v-else>🔥 ĐANG KHAI HỎA GÓC {{ currentAngle }}°</span>
+                    </div>
+                </div>
+
+                <div class="flex-1 relative mt-4">
+                    <svg viewBox="0 0 720 220" class="absolute inset-x-0 bottom-0 w-full h-full" preserveAspectRatio="none">
+                        <defs>
+                            <marker id="arrowOrange" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+                                <path d="M0,0 L0,6 L7,3 z" fill="#f97316"></path>
+                            </marker>
+                        </defs>
+
+                        <rect x="0" y="184" width="720" height="36" fill="#14532d"></rect>
+                        <line x1="0" y1="184" x2="720" y2="184" stroke="#22c55e" stroke-width="3"></line>
+
+                        <g transform="translate(45,178)" :class="{'animate-fire': isFiring}">
+                            <rect x="0" y="-28" width="44" height="28" rx="6" fill="#475569"></rect>
+                            <circle cx="12" cy="4" r="9" fill="#0f172a"></circle>
+                            <circle cx="35" cy="4" r="9" fill="#0f172a"></circle>
+                            <rect x="29" y="-24" width="78" height="15" rx="4" fill="#64748b"
+                                  :transform="`rotate(${-currentAngleForBarrel} 32 -18)`"></rect>
+                        </g>
+
+                        <g class="target-glow">
+                            <line :x1="tab1TargetX" y1="184" :x2="tab1TargetX" y2="126" stroke="#22c55e" stroke-width="3"></line>
+                            <circle :cx="tab1TargetX" cy="126" r="22" fill="#dc2626"></circle>
+                            <circle :cx="tab1TargetX" cy="126" r="14" fill="#ffffff"></circle>
+                            <circle :cx="tab1TargetX" cy="126" r="7" fill="#dc2626"></circle>
+                            <text :x="tab1TargetX - 30" y="116" fill="#fef2f2" font-size="12" font-weight="900">HỒNG TÂM</text>
+                        </g>
+
+                        <path v-for="trace in gameTraces" :key="trace.id"
+                              :d="trace.path" fill="none" :stroke="trace.color" stroke-width="3" stroke-dasharray="6,5" opacity="0.75"></path>
+                        <text v-for="trace in gameTraces" :key="'txt-' + trace.id"
+                              :x="Math.min(trace.endX + 5, 685)" :y="178" :fill="trace.color" font-size="12" font-weight="900">{{ trace.angle }}°</text>
+
+                        <path v-if="isFiring" :d="gameCurrentPath" fill="none" stroke="#f59e0b" stroke-width="4" marker-end="url(#arrowOrange)"></path>
+                        <circle v-if="isFiring" :cx="gameBallX" :cy="gameBallY" r="7" fill="#f97316" stroke="#fff7ed" stroke-width="2"></circle>
+                    </svg>
+                </div>
+            </div>
+        </section>
+
+        <section v-show="activeTab === 2" class="tab-panel">
+            <h2 class="readable text-lg md:text-xl font-black text-indigo-900 mb-4 border-b pb-3">Tab 2 - Cẩm nang giải tích lượng giác</h2>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+                <div class="space-y-4 text-sm">
+                    <div class="note-card bg-slate-50 border shadow-sm">
+                        <h3 class="font-black text-slate-900 mb-2">1. Thiết lập mô hình ném xiên Oxy</h3>
+                        <p class="readable">Chọn gốc tọa độ tại vị trí ném, trục $Ox$ nằm ngang, trục $Oy$ thẳng đứng hướng lên. Khi bỏ qua lực cản không khí:</p>
+                        
+                        <div class="formula-box my-3">
+                            $$v_x = v_0\cos\alpha, \qquad x = (v_0\cos\alpha)t$$
+                            $$v_y = v_0\sin\alpha - gt, \qquad y = (v_0\sin\alpha)t - \frac{1}{2}gt^2$$
+                        </div>
+                        
+                        <p class="readable">Khi vật chạm đất, $y=0$, suy ra thời gian bay toàn phần:</p>
+                        <div class="formula-box my-3">
+                            $$t_{\text{bay}} = \frac{2v_0\sin\alpha}{g}$$
+                        </div>
+                    </div>
+
+                    <div class="note-card bg-indigo-50 border-l-4 border-indigo-700 shadow-sm">
+                        <h3 class="font-black text-indigo-950 mb-2">2. Chứng minh tầm bay xa cực đại</h3>
+                        <p class="readable">Thế $t_{\text{bay}}$ vào phương trình ngang:</p>
+                        
+                        <div class="formula-box my-3">
+                            $$L = v_0\cos\alpha \cdot \frac{2v_0\sin\alpha}{g}
+                            = \frac{v_0^2(2\sin\alpha\cos\alpha)}{g}$$
+                        </div>
+                        
+                        <p class="readable">Dùng công thức nhân đôi $2\sin\alpha\cos\alpha=\sin2\alpha$:</p>
+                        <div class="formula-box my-3">
+                            $$L = \frac{v_0^2\sin2\alpha}{g}$$
+                        </div>
+                        <p class="readable">Với $v_0$ và $g$ không đổi, $L$ lớn nhất khi $\sin2\alpha=1$.</p>
+                        <div class="formula-box my-3 text-emerald-700">
+                            $$2\alpha=90^\circ \Rightarrow \alpha=45^\circ$$
+                        </div>
+                        <p class="readable text-xs font-semibold text-indigo-900 mt-2">Hai góc phụ nhau như $30^\circ$ và $60^\circ$ cho cùng tầm xa vì $\sin60^\circ=\sin120^\circ$.</p>
+                    </div>
+
+                    <div class="note-card bg-amber-50 border border-amber-300 text-amber-950">
+                        <h3 class="font-black mb-1">Góc phản biện dự án</h3>
+                        <p class="readable text-sm">Trong ném lao, đẩy tạ hoặc sút bóng thực tế, góc tối ưu thường nhỏ hơn $45^\circ$ do lực cản không khí, hình dạng vật, độ cao điểm buông và kỹ thuật sinh lực của vận động viên.</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl border p-5 shadow-sm">
+                    <p class="readable text-xs font-black text-slate-500 mb-4 uppercase tracking-wider text-center">Chùm 3 quỹ đạo minh họa</p>
+                    <svg viewBox="0 0 420 260" class="w-full h-auto bg-slate-50 rounded-xl border">
+                        <line x1="35" y1="225" x2="395" y2="225" stroke="#475569" stroke-width="2"></line>
+                        <line x1="35" y1="225" x2="35" y2="20" stroke="#475569" stroke-width="2"></line>
+                        <text x="382" y="243" font-size="12" fill="#475569" font-weight="800">Ox</text>
+                        <text x="12" y="28" font-size="12" fill="#475569" font-weight="800">Oy</text>
+
+                        <path d="M35,225 Q155,130 275,225" fill="none" stroke="#3b82f6" stroke-width="3" stroke-dasharray="7,5"></path>
+                        <text x="155" y="150" fill="#3b82f6" font-size="13" font-weight="900">30°</text>
+
+                        <path d="M35,225 Q155,35 275,225" fill="none" stroke="#ef4444" stroke-width="3" stroke-dasharray="7,5"></path>
+                        <text x="145" y="58" fill="#ef4444" font-size="13" font-weight="900">60°</text>
+
+                        <path d="M35,225 Q210,70 385,225" fill="none" stroke="#10b981" stroke-width="4"></path>
+                        <text x="230" y="88" fill="#059669" font-size="14" font-weight="900">45° - Lớn nhất</text>
+
+                        <circle cx="275" cy="225" r="5" fill="#64748b"></circle>
+                        <circle cx="385" cy="225" r="6" fill="#10b981"></circle>
+                        <text x="245" y="244" font-size="12" fill="#64748b" font-weight="800">L(30°)=L(60°)</text>
+                        <text x="354" y="244" font-size="12" fill="#059669" font-weight="900">Lmax</text>
+                    </svg>
+                    <div class="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                        <div class="p-3 rounded-xl bg-blue-50 border border-blue-200"><b>30°:</b> bay thấp, rơi sớm.</div>
+                        <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200"><b>45°:</b> cân bằng ngang - đứng, tầm xa cực đại.</div>
+                        <div class="p-3 rounded-xl bg-red-50 border border-red-200"><b>60°:</b> bay cao, tầm xa bằng 30°.</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section v-show="activeTab === 3" class="tab-panel h-full flex flex-col gap-4">
+            <div class="border-b pb-3">
+                <h2 class="readable text-lg md:text-xl font-black text-indigo-900">Tab 3 - Phòng nghiên cứu chùm quỹ đạo Parabol</h2>
+                <p class="readable text-xs md:text-sm italic text-slate-600 mt-1">Điều khiển $v_0$ và $\alpha$, bắn vật 60fps, lưu nhiều vết cũ để so sánh trực quan tầm xa và độ cao.</p>
+            </div>
+
+            <div class="bg-slate-50 p-4 rounded-2xl border flex-shrink-0 grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-4 items-stretch">
+                <div class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-xs font-black text-slate-700 block mb-1">
+                                Vận tốc đầu $v_0$ (m/s):
+                                <span class="text-indigo-700 font-mono text-base">{{ paramV0 }}</span>
+                            </label>
+                            <input type="range" v-model.number="paramV0" min="10" max="30" step="1" class="w-full accent-indigo-800" :disabled="isSimRunning">
+                        </div>
+                        <div>
+                            <label class="text-xs font-black text-slate-700 block mb-1">
+                                Góc ném $\alpha$ (độ):
+                                <span class="text-indigo-700 font-mono text-base">{{ paramAngle }}°</span>
+                            </label>
+                            <input type="range" v-model.number="paramAngle" min="0" max="90" step="1" class="w-full accent-indigo-800" :disabled="isSimRunning">
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2 items-center">
+                        <button v-for="quick in [30,45,60]" :key="quick" type="button" @click="paramAngle = quick; typesetMath()" :disabled="isSimRunning"
+                                class="px-3 py-1.5 rounded-lg border text-xs font-black bg-white hover:bg-indigo-50 disabled:opacity-50 cursor-pointer">
+                            Đặt α = {{ quick }}°
+                        </button>
+                        <button type="button" @click="paramV0 = 20; paramAngle = 45; typesetMath()" :disabled="isSimRunning"
+                                class="px-3 py-1.5 rounded-lg border text-xs font-black bg-white hover:bg-indigo-50 disabled:opacity-50 cursor-pointer">
+                            Mẫu: v₀=20, α=45°
+                        </button>
+                    </div>
+
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <label class="flex items-center gap-2 cursor-pointer text-xs font-black text-slate-700">
+                            <input type="checkbox" v-model="keepTraces" class="accent-indigo-700 w-4 h-4" :disabled="isSimRunning">
+                            Giữ lại vết cũ để tạo chùm quỹ đạo Parabol
+                        </label>
+                        <button type="button" @click="clearTraces" class="text-xs text-red-600 underline font-bold hover:text-red-800 cursor-pointer" :disabled="isSimRunning">
+                            Xóa sạch vết
+                        </button>
+                    </div>
+
+                    <button type="button" @click="launchSimulation" :disabled="isSimRunning"
+                            class="w-full py-3 bg-indigo-800 text-white font-black rounded-xl shadow text-sm hover:bg-indigo-700 transition disabled:bg-slate-400 cursor-pointer">
+                        🚀 KÍCH HOẠT PHÓNG VẬT
+                    </button>
+                </div>
+
+                <div class="bg-slate-950 border-2 border-slate-700 text-white p-4 rounded-2xl shadow-md">
+                    <p class="text-[10px] text-slate-400 font-mono font-black tracking-widest uppercase mb-3 border-b border-slate-700 pb-2 text-center">Telemetry thời gian thực - g = 10 m/s²</p>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                        <div class="text-slate-300">Lý thuyết $L$:</div><div class="font-mono text-emerald-400 font-black text-right">{{ theoreticalL.toFixed(2) }} m</div>
+                        <div class="text-slate-300">$H_{max}$:</div><div class="font-mono text-amber-300 font-black text-right">{{ theoreticalH.toFixed(2) }} m</div>
+                        <div class="text-slate-300">$t_{bay}$:</div><div class="font-mono text-blue-300 font-black text-right">{{ theoreticalT.toFixed(2) }} s</div>
+                        <div class="col-span-2 border-t border-slate-700 my-1"></div>
+                        <div class="text-slate-300">t hiện tại:</div><div class="font-mono text-white font-black text-right">{{ simTime.toFixed(2) }} s</div>
+                        <div class="text-slate-300">x hiện tại:</div><div class="font-mono text-white font-black text-right">{{ currentX.toFixed(2) }} m</div>
+                        <div class="text-slate-300">y hiện tại:</div><div class="font-mono text-white font-black text-right">{{ currentY.toFixed(2) }} m</div>
+                        <div class="text-slate-300">$v_x$:</div><div class="font-mono text-emerald-300 font-black text-right">{{ currentVx.toFixed(2) }} m/s</div>
+                        <div class="text-slate-300">$v_y$:</div><div class="font-mono text-red-300 font-black text-right">{{ currentVy.toFixed(2) }} m/s</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-1 bg-slate-950 rounded-2xl p-3 border shadow-inner relative overflow-hidden min-h-[340px]">
+                <div class="absolute top-3 left-4 z-10 text-[10px] font-black text-slate-500 uppercase tracking-wider">
+                    Mô phỏng native SVG - tỉ lệ cố định, chạy bằng requestAnimationFrame
+                </div>
+                <svg viewBox="0 0 700 320" class="w-full h-full bg-slate-900/60 rounded-xl" preserveAspectRatio="none">
+                    <defs>
+                        <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+                            <path d="M0,0 L0,6 L7,3 z" fill="#22c55e"></path>
+                        </marker>
+                        <marker id="arrowRed" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+                            <path d="M0,0 L0,6 L7,3 z" fill="#ef4444"></path>
+                        </marker>
+                    </defs>
+
+                    <g stroke="#334155" stroke-width="0.8" stroke-dasharray="3,5">
+                        <line v-for="x in gridX" :key="'gx'+x" :x1="x" y1="20" :x2="x" y2="292"></line>
+                        <line v-for="y in gridY" :key="'gy'+y" x1="40" :y1="y" x2="680" :y2="y"></line>
+                    </g>
+
+                    <line x1="40" y1="292" x2="680" y2="292" stroke="#64748b" stroke-width="2"></line>
+                    <line x1="40" y1="292" x2="40" y2="20" stroke="#64748b" stroke-width="2"></line>
+                    <text x="655" y="312" font-size="11" fill="#94a3b8" font-weight="900">X (m)</text>
+                    <text x="10" y="28" font-size="11" fill="#94a3b8" font-weight="900">Y (m)</text>
+                    <text v-for="mark in xMarks" :key="'xm'+mark.value" :x="mark.x - 9" y="309" font-size="10" fill="#94a3b8">{{ mark.value }}</text>
+                    <text v-for="mark in yMarks" :key="'ym'+mark.value" x="12" :y="mark.y + 4" font-size="10" fill="#94a3b8">{{ mark.value }}</text>
+
+                    <path v-if="previewPath && !isSimRunning && !showLanded" :d="previewPath" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,6" opacity="0.5"></path>
+
+                    <g v-for="trace in savedTraces" :key="trace.id">
+                        <path :d="trace.path" fill="none" :stroke="trace.color" stroke-width="2.2" stroke-dasharray="7,5" opacity="0.85"></path>
+                        <circle :cx="trace.endX" :cy="292" r="3.5" :fill="trace.color"></circle>
+                        <text :x="Math.min(trace.endX + 5, 655)" y="286" :fill="trace.color" font-size="11" font-weight="900">
+                            {{ trace.angle }}° | L={{ trace.range.toFixed(1) }}m
+                        </text>
+                    </g>
+
+                    <path v-if="currentSvgPath" :d="currentSvgPath" fill="none" stroke="#f59e0b" stroke-width="3.2"></path>
+
+                    <g v-if="isSimRunning || showLanded">
+                        <circle :cx="svgX" :cy="svgY" r="6" fill="#facc15" stroke="#fff" stroke-width="2"></circle>
+                        <line v-if="isSimRunning" :x1="svgX" :y1="svgY" :x2="svgX + currentVx * 3" :y2="svgY" stroke="#22c55e" stroke-width="2" marker-end="url(#arrowGreen)"></line>
+                        <line v-if="isSimRunning" :x1="svgX" :y1="svgY" :x2="svgX" :y2="svgY - currentVy * 3" stroke="#ef4444" stroke-width="2" marker-end="url(#arrowRed)"></line>
+                        <text v-if="isSimRunning" :x="svgX + 8" :y="svgY - 10" fill="#f8fafc" font-size="11" font-weight="900">vật</text>
+                    </g>
+                </svg>
+            </div>
+        </section>
+
+        <section v-show="activeTab === 4" class="tab-panel">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5 border-b pb-4">
+                <div>
+                    <h2 class="readable text-lg md:text-xl font-black text-indigo-900">Tab 4 - Bảo vệ dự án nghiên cứu</h2>
+                    <p class="readable text-xs md:text-sm italic text-slate-600 mt-1">4 câu hỏi phản biện, mỗi câu đủ 4 đáp án A, B, C, D và giải thích chi tiết.</p>
+                </div>
+                <button type="button" @click="resetQuiz" class="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white font-bold text-sm rounded-xl shadow cursor-pointer transition-colors flex-shrink-0">
+                    Làm lại trắc nghiệm
+                </button>
+            </div>
+
+            <div class="space-y-6">
+                <div v-for="(q, qIndex) in questions" :key="q.id" class="bg-slate-50 p-5 md:p-6 rounded-2xl border border-slate-200">
+                    <div class="mb-5 bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                        <p class="readable font-black text-slate-900 text-sm md:text-base">
+                            <span class="bg-indigo-900 text-white px-3 py-1 rounded-lg text-xs font-black tracking-wider mr-2 inline-block mb-2 md:mb-0">CÂU {{ qIndex + 1 }}</span>
+                            <span v-html="q.text"></span>
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-3">
+                        <div v-for="(opt, oIndex) in q.options" :key="oIndex"
+                             @click="selectOption(q.id, oIndex)"
+                             class="answer-option border-2"
+                             :class="getOptionClass(q, oIndex)">
+                            <div class="answer-flex">
+                                <span class="answer-letter" :class="getLetterClass(q, oIndex)">
+                                    {{ String.fromCharCode(65 + oIndex) }}
+                                </span>
+                                <div class="flex-1 min-w-0 readable text-sm md:text-base font-medium pt-0.5" v-html="opt.text"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <transition name="fade">
+                        <div v-if="q.selected !== null"
+                             class="note-card mt-5 border-2 text-sm md:text-base font-medium leading-relaxed"
+                             :class="q.options[q.selected].isCorrect ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-red-50 border-red-300 text-red-900'">
+                            <p class="font-black mb-2 flex items-center gap-2">
+                                <span v-if="q.options[q.selected].isCorrect">✅ Phân tích kỹ thuật chính xác</span>
+                                <span v-else>❌ Lỗi tư duy phân tích</span>
+                            </p>
+                            <p class="readable" v-html="q.options[q.selected].feedback"></p>
+                        </div>
+                    </transition>
+                </div>
+            </div>
+        </section>
+
+    </main>
+</div>
+
+<script>
+const { createApp, ref, computed, onMounted, nextTick, watch, onBeforeUnmount } = Vue;
+
+createApp({
+    setup() {
+        const tabs = [
+            '1. Pháo thủ căn góc',
+            '2. Tối ưu lượng giác',
+            '3. Xưởng quét Parabol',
+            '4. Trắc nghiệm tư duy'
+        ];
+        const activeTab = ref(1);
+
+        const toast = ref({ show: false, message: '', isError: false });
+        let toastTimer = null;
+
+        const showToast = (message, isError = false) => {
+            toast.value = { show: true, message, isError };
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => { toast.value.show = false; }, 2800);
+        };
+
+        const typesetMath = () => {
+            nextTick(() => {
+                const root = document.getElementById('app');
+                if (!root || !window.__mathjaxReady || !window.MathJax || !window.MathJax.typesetPromise) return;
+                try {
+                    if (window.MathJax.typesetClear) window.MathJax.typesetClear([root]);
+                    window.MathJax.typesetPromise([root]).catch((err) => console.warn('MathJax typeset error:', err));
+                } catch (err) {
+                    console.warn('MathJax error:', err);
+                }
+            });
+        };
+
+        window.addEventListener('mathjax-ready', typesetMath);
+
+        const changeTab = (tabIndex) => {
+            activeTab.value = tabIndex;
+            typesetMath();
+        };
+
+        // TAB 1
+        const getInitialCards = () => ([
+            { id: 'angle-30', val: 30 },
+            { id: 'angle-45', val: 45 },
+            { id: 'angle-60', val: 60 }
+        ]);
+
+        const sourceCards = ref(getInitialCards());
+        const draggedCard = ref(null);
+        const isFiring = ref(false);
+        const currentAngle = ref(0);
+        const currentAngleForBarrel = computed(() => currentAngle.value || 0);
+        const gameTraces = ref([]);
+        const gameBallX = ref(55);
+        const gameBallY = ref(184);
+        const gameCurrentPath = ref('');
+        const tab1TargetX = 640;
+        let gameAnimationId = null;
+
+        const dragStart = (card) => { draggedCard.value = card; };
+
+        const dropAngle = (target) => {
+            if (!draggedCard.value || isFiring.value) return;
+            if (target === 'cannon') playAngle(draggedCard.value);
+            draggedCard.value = null;
+        };
+
+        const buildGamePathPoint = (angle, t) => {
+            const startX = 55;
+            const groundY = 184;
+            const v0 = 33;
+            const g = 10;
+            const rad = angle * Math.PI / 180;
+            const xScale = (tab1TargetX - startX) / ((v0 * v0) / g);
+            const yScale = 2.0;
+            const xPhys = v0 * Math.cos(rad) * t;
+            const yPhys = v0 * Math.sin(rad) * t - 0.5 * g * t * t;
+            return {
+                x: startX + xPhys * xScale,
+                y: groundY - yPhys * yScale,
+                rangePhys: xPhys
+            };
+        };
+
+        const finishGameShot = (angle, points) => {
+            const path = 'M ' + points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ');
+            const endPoint = points[points.length - 1];
+            const color = angle === 45 ? '#22c55e' : (angle === 60 ? '#ef4444' : '#3b82f6');
+            gameTraces.value.push({
+                id: `${Date.now()}-${angle}`,
+                angle,
+                path,
+                endX: endPoint.x,
+                color
+            });
+
+            if (angle === 45) {
+                showToast('🎉 Góc 45°: Trúng hồng tâm cực đại! Đây là góc tối ưu trong mô hình lí tưởng.', false);
+            } else if (angle === 30) {
+                showToast('⚠️ Góc 30°: Rơi non. Vật bay thấp nên chưa đạt tầm xa cực đại.', true);
+            } else if (angle === 60) {
+                showToast('⚠️ Góc 60°: Bay cao nhưng rơi ngắn. Tầm xa bằng góc 30° vì hai góc phụ nhau.', true);
+            }
+        };
+
+        const playAngle = (card) => {
+            if (!card || isFiring.value) return;
+            sourceCards.value = sourceCards.value.filter(item => item.id !== card.id);
+            currentAngle.value = card.val;
+            isFiring.value = true;
+            gameCurrentPath.value = '';
+
+            if (gameAnimationId) cancelAnimationFrame(gameAnimationId);
+
+            const angle = card.val;
+            const rad = angle * Math.PI / 180;
+            const v0 = 33;
+            const g = 10;
+            const tFlight = Math.max(0.01, (2 * v0 * Math.sin(rad)) / g);
+            const duration = 1200;
+            const points = [];
+            let start = null;
+
+            const animate = (timestamp) => {
+                if (start === null) start = timestamp;
+                const progress = Math.min((timestamp - start) / duration, 1);
+                const t = progress * tFlight;
+                const p = buildGamePathPoint(angle, t);
+                gameBallX.value = p.x;
+                gameBallY.value = p.y;
+                points.push(p);
+                gameCurrentPath.value = 'M ' + points.map(pt => `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`).join(' L ');
+
+                if (progress < 1) {
+                    gameAnimationId = requestAnimationFrame(animate);
+                } else {
+                    isFiring.value = false;
+                    finishGameShot(angle, points);
+                }
+            };
+            gameAnimationId = requestAnimationFrame(animate);
+        };
+
+        const resetTab1 = () => {
+            if (gameAnimationId) cancelAnimationFrame(gameAnimationId);
+            isFiring.value = false;
+            currentAngle.value = 0;
+            sourceCards.value = getInitialCards();
+            gameTraces.value = [];
+            gameCurrentPath.value = '';
+            gameBallX.value = 55;
+            gameBallY.value = 184;
+            draggedCard.value = null;
+            toast.value.show = false;
+        };
+
+        // TAB 3
+        const paramV0 = ref(25);
+        const paramAngle = ref(45);
+        const keepTraces = ref(true);
+        const isSimRunning = ref(false);
+        const showLanded = ref(false);
+        const simTime = ref(0);
+        const currentX = ref(0);
+        const currentY = ref(0);
+        const currentVx = ref(0);
+        const currentVy = ref(0);
+        const currentPathPoints = ref([]);
+        const savedTraces = ref([]);
+        let simAnimationId = null;
+
+        const G = 10;
+        const ORIGIN_X = 40;
+        const GROUND_Y = 292;
+        const X_SCALE = 7.0;
+        const Y_SCALE = 5.75;
+
+        const gridX = computed(() => Array.from({ length: 10 }, (_, i) => ORIGIN_X + (i + 1) * 63));
+        const gridY = computed(() => Array.from({ length: 5 }, (_, i) => GROUND_Y - (i + 1) * 48));
+        const xMarks = computed(() => [0, 20, 40, 60, 80, 90].map(value => ({ value, x: ORIGIN_X + value * X_SCALE })));
+        const yMarks = computed(() => [0, 10, 20, 30, 40].map(value => ({ value, y: GROUND_Y - value * Y_SCALE })));
+
+        const angleRad = computed(() => paramAngle.value * Math.PI / 180);
+        const theoreticalT = computed(() => {
+            const t = (2 * paramV0.value * Math.sin(angleRad.value)) / G;
+            return Math.max(0, t);
+        });
+        const theoreticalL = computed(() => {
+            const L = (paramV0.value * paramV0.value * Math.sin(2 * angleRad.value)) / G;
+            return Math.max(0, Math.abs(L) < 1e-10 ? 0 : L);
+        });
+        const theoreticalH = computed(() => {
+            const H = (paramV0.value * paramV0.value * Math.pow(Math.sin(angleRad.value), 2)) / (2 * G);
+            return Math.max(0, H);
+        });
+
+        const mapToSvg = (x, y) => ({
+            x: ORIGIN_X + x * X_SCALE,
+            y: GROUND_Y - y * Y_SCALE
+        });
+
+        const svgX = computed(() => mapToSvg(currentX.value, currentY.value).x);
+        const svgY = computed(() => mapToSvg(currentX.value, currentY.value).y);
+
+        const buildTrajectoryPoints = (v0, angleDeg, samples = 96) => {
+            const rad = angleDeg * Math.PI / 180;
+            const tFlight = Math.max(0, (2 * v0 * Math.sin(rad)) / G);
+            if (tFlight <= 0.0001) return [{ t: 0, x: 0, y: 0 }];
+            const points = [];
+            for (let i = 0; i <= samples; i++) {
+                const t = (tFlight * i) / samples;
+                const x = v0 * Math.cos(rad) * t;
+                const y = Math.max(0, v0 * Math.sin(rad) * t - 0.5 * G * t * t);
+                points.push({ t, x, y });
+            }
+            return points;
+        };
+
+        const pathFromPoints = (points) => {
+            if (!points || points.length === 0) return '';
+            return 'M ' + points.map(point => {
+                const mapped = mapToSvg(point.x, point.y);
+                return `${mapped.x.toFixed(2)},${mapped.y.toFixed(2)}`;
+            }).join(' L ');
+        };
+
+        const currentSvgPath = computed(() => pathFromPoints(currentPathPoints.value));
+        const previewPath = computed(() => pathFromPoints(buildTrajectoryPoints(paramV0.value, paramAngle.value, 80)));
+
+        const getColorForAngle = (angle) => {
+            if (angle === 45) return '#22c55e';
+            if (angle > 45) return '#ef4444';
+            return '#3b82f6';
+        };
+
+        const saveCompletedTrace = (v0, angle, points) => {
+            const finalPoint = points[points.length - 1] || { x: 0, y: 0 };
+            const mappedEnd = mapToSvg(finalPoint.x, 0);
+            savedTraces.value.push({
+                id: `${Date.now()}-${v0}-${angle}-${savedTraces.value.length}`,
+                v0,
+                angle,
+                range: finalPoint.x,
+                height: points.reduce((max, p) => Math.max(max, p.y), 0),
+                endX: mappedEnd.x,
+                path: pathFromPoints(points),
+                color: getColorForAngle(angle)
+            });
+        };
+
+        const clearTraces = () => {
+            if (simAnimationId) cancelAnimationFrame(simAnimationId);
+            isSimRunning.value = false;
+            showLanded.value = false;
+            simTime.value = 0;
+            currentX.value = 0;
+            currentY.value = 0;
+            currentVx.value = 0;
+            currentVy.value = 0;
+            currentPathPoints.value = [];
+            savedTraces.value = [];
+        };
+
+        const finishSimulation = (v0, angle, points) => {
+            isSimRunning.value = false;
+            showLanded.value = true;
+            const finalPoint = points[points.length - 1] || { t: 0, x: 0, y: 0 };
+            simTime.value = finalPoint.t || 0;
+            currentX.value = finalPoint.x || 0;
+            currentY.value = 0;
+            currentVx.value = v0 * Math.cos(angle * Math.PI / 180);
+            currentVy.value = -v0 * Math.sin(angle * Math.PI / 180);
+
+            if (keepTraces.value) {
+                saveCompletedTrace(v0, angle, points);
+                currentPathPoints.value = [];
+            }
+
+            if (angle === 45) {
+                showToast('✅ Đã lưu/hiển thị quỹ đạo 45°: tầm xa đạt cực đại trong mô hình lí tưởng.', false);
+            } else if (angle === 30 || angle === 60) {
+                showToast('ℹ️ Hãy bắn thêm góc phụ nhau 30°/60° để thấy chúng cho cùng tầm xa.', false);
+            } else if (angle === 0 || angle === 90) {
+                showToast('⚠️ Góc biên cho tầm xa gần bằng 0 trong mô hình này.', true);
+            }
+        };
+
+        const launchSimulation = () => {
+            if (isSimRunning.value) return;
+            if (simAnimationId) cancelAnimationFrame(simAnimationId);
+
+            const v0 = Number(paramV0.value);
+            const angle = Number(paramAngle.value);
+            const rad = angle * Math.PI / 180;
+            const tFlight = Math.max(0, (2 * v0 * Math.sin(rad)) / G);
+
+            if (!keepTraces.value) savedTraces.value = [];
+
+            isSimRunning.value = true;
+            showLanded.value = false;
+            simTime.value = 0;
+            currentX.value = 0;
+            currentY.value = 0;
+            currentVx.value = v0 * Math.cos(rad);
+            currentVy.value = v0 * Math.sin(rad);
+            currentPathPoints.value = [{ t: 0, x: 0, y: 0 }];
+
+            if (tFlight <= 0.0001) {
+                finishSimulation(v0, angle, [{ t: 0, x: 0, y: 0 }]);
+                return;
+            }
+
+            const duration = 1800;
+            const points = [{ t: 0, x: 0, y: 0 }];
+            let start = null;
+            let lastRecordedT = 0;
+
+            const step = (timestamp) => {
+                if (start === null) start = timestamp;
+                const progress = Math.min((timestamp - start) / duration, 1);
+                const t = progress * tFlight;
+                const x = v0 * Math.cos(rad) * t;
+                const yRaw = v0 * Math.sin(rad) * t - 0.5 * G * t * t;
+                const y = Math.max(0, yRaw);
+
+                simTime.value = t;
+                currentX.value = x;
+                currentY.value = y;
+                currentVx.value = v0 * Math.cos(rad);
+                currentVy.value = v0 * Math.sin(rad) - G * t;
+
+                if (progress === 1 || t - lastRecordedT >= 0.025) {
+                    const point = { t, x, y };
+                    points.push(point);
+                    currentPathPoints.value = points.slice();
+                    lastRecordedT = t;
+                }
+
+                if (progress < 1) {
+                    simAnimationId = requestAnimationFrame(step);
+                } else {
+                    finishSimulation(v0, angle, points);
+                }
+            };
+
+            simAnimationId = requestAnimationFrame(step);
+        };
+
+        watch([paramV0, paramAngle], () => {
+            if (!isSimRunning.value) {
+                showLanded.value = false;
+                simTime.value = 0;
+                currentX.value = 0;
+                currentY.value = 0;
+                currentVx.value = paramV0.value * Math.cos(angleRad.value);
+                currentVy.value = paramV0.value * Math.sin(angleRad.value);
+            }
+            typesetMath();
+        });
+
+        // TAB 4
+        const makeQuestions = () => ([
+            {
+                id: 1,
+                text: 'Tầm bay xa lớn nhất của vật ném xiên trong điều kiện lí tưởng đạt được khi góc ném $\\alpha$ bằng bao nhiêu?',
+                selected: null,
+                options: [
+                    { text: '$30^\\circ$', isCorrect: false, feedback: 'Sai. Góc $30^\\circ$ cho vật bay thấp và rơi sớm hơn góc tối ưu.' },
+                    { text: '$45^\\circ$', isCorrect: true, feedback: 'Đúng. Vì $L=\\frac{v_0^2\\sin2\\alpha}{g}$, $L$ lớn nhất khi $\\sin2\\alpha=1$, suy ra $2\\alpha=90^\\circ$ và $\\alpha=45^\\circ$.' },
+                    { text: '$60^\\circ$', isCorrect: false, feedback: 'Sai. Góc $60^\\circ$ làm vật bay cao hơn nhưng không xa nhất; nó có cùng tầm xa với góc $30^\\circ$ nếu cùng $v_0$.' },
+                    { text: '$90^\\circ$', isCorrect: false, feedback: 'Sai. Góc $90^\\circ$ là ném thẳng đứng, tầm xa theo phương ngang bằng 0.' }
+                ]
+            },
+            {
+                id: 2,
+                text: 'Nếu giữ nguyên vận tốc đầu $v_0$, cặp góc nào cho cùng một tầm bay xa $L$?',
+                selected: null,
+                options: [
+                    { text: '$20^\\circ$ và $40^\\circ$', isCorrect: false, feedback: 'Sai. Hai góc này không phụ nhau nên không cho cùng $\\sin2\\alpha$.' },
+                    { text: '$30^\\circ$ và $60^\\circ$', isCorrect: true, feedback: 'Đúng. Hai góc phụ nhau có tổng $90^\\circ$. Ta có $\\sin(2\\cdot30^\\circ)=\\sin60^\\circ$ và $\\sin(2\\cdot60^\\circ)=\\sin120^\\circ=\\sin60^\\circ$.' },
+                    { text: '$45^\\circ$ và $90^\\circ$', isCorrect: false, feedback: 'Sai. Góc $45^\\circ$ cho tầm xa cực đại, còn góc $90^\\circ$ có tầm xa bằng 0.' },
+                    { text: '$15^\\circ$ và $30^\\circ$', isCorrect: false, feedback: 'Sai. Hai góc này không có tổng bằng $90^\\circ$.' }
+                ]
+            },
+            {
+                id: 3,
+                text: 'Cho $v_0=20\\,\\mathrm{m/s}$, $\\alpha=45^\\circ$, lấy $g=10\\,\\mathrm{m/s^2}$. Tầm xa cực đại $L_{max}$ bằng bao nhiêu?',
+                selected: null,
+                options: [
+                    { text: '$20\\,\\mathrm{m}$', isCorrect: false, feedback: 'Sai. Đây là kết quả thiếu bình phương vận tốc hoặc sai hệ số.' },
+                    { text: '$28{,}3\\,\\mathrm{m}$', isCorrect: false, feedback: 'Sai bẫy lượng giác. Kết quả này thường do lấy nhầm $\\sin45^\\circ$ thay vì $\\sin(2\\cdot45^\\circ)=\\sin90^\\circ$.' },
+                    { text: '$40\\,\\mathrm{m}$', isCorrect: true, feedback: 'Đúng. $L=\\frac{v_0^2\\sin2\\alpha}{g}=\\frac{20^2\\cdot\\sin90^\\circ}{10}=\\frac{400}{10}=40\\,\\mathrm{m}$.' },
+                    { text: '$80\\,\\mathrm{m}$', isCorrect: false, feedback: 'Sai. Kết quả này thường do nhân thừa hệ số 2 sau khi đã dùng công thức $\\sin2\\alpha$.' }
+                ]
+            },
+            {
+                id: 4,
+                text: 'Nếu vật được ném từ độ cao $H>0$ so với mặt đất, ví dụ vận động viên đẩy tạ buông tạ từ vai cao khoảng $2\\,\\mathrm{m}$, góc ném tối ưu sẽ thế nào so với $45^\\circ$?',
+                selected: null,
+                options: [
+                    { text: 'Vẫn luôn bằng đúng $45^\\circ$.', isCorrect: false, feedback: 'Sai. Góc $45^\\circ$ chỉ là kết quả lí tưởng khi điểm ném và điểm rơi cùng độ cao.' },
+                    { text: 'Lớn hơn $45^\\circ$ để vật bay bổng hơn.', isCorrect: false, feedback: 'Sai. Khi điểm ném đã cao hơn mặt đất, tăng góc quá nhiều làm giảm thành phần vận tốc ngang.' },
+                    { text: 'Nhỏ hơn $45^\\circ$ một chút.', isCorrect: true, feedback: 'Đúng. Độ cao ban đầu giúp vật có thêm thời gian rơi, nên có thể giảm góc để tăng $v_x$ và đạt tầm xa lớn hơn.' },
+                    { text: 'Bằng $0^\\circ$ trong mọi trường hợp.', isCorrect: false, feedback: 'Sai. Ném ngang hoàn toàn thường không tối ưu vì vật thiếu thành phần vận tốc hướng lên để kéo dài thời gian bay.' }
+                ]
+            }
+        ]);
+
+        const questions = ref(makeQuestions());
+
+        const selectOption = (qId, optionIndex) => {
+            const question = questions.value.find(item => item.id === qId);
+            if (!question || question.selected !== null) return;
+            question.selected = optionIndex;
+            typesetMath();
+        };
+
+        const getLetterClass = (question, optionIndex) => {
+            if (question.selected === null) return 'bg-slate-200 text-slate-700';
+            if (question.options[optionIndex].isCorrect) return 'bg-emerald-200 text-emerald-900';
+            if (question.selected === optionIndex) return 'bg-red-200 text-red-900';
+            return 'bg-slate-100 text-slate-400';
+        };
+
+        const getOptionClass = (q, optionIndex) => {
+            if (q.selected === null) return 'bg-white border-slate-200 hover:bg-indigo-50 hover:border-indigo-300 hover:shadow-md';
+            if (q.selected === optionIndex) {
+                return q.options[optionIndex].isCorrect
+                    ? 'bg-emerald-50 border-emerald-500 shadow-md'
+                    : 'bg-red-50 border-red-400 shadow-md';
+            }
+            if (q.options[optionIndex].isCorrect) return 'bg-emerald-50 border-emerald-500 shadow-md';
+            return 'bg-slate-50 border-slate-100 opacity-60';
+        };
+
+        const resetQuiz = () => {
+            questions.value = makeQuestions();
+            typesetMath();
+        };
+
+        onMounted(() => {
+            currentVx.value = paramV0.value * Math.cos(angleRad.value);
+            currentVy.value = paramV0.value * Math.sin(angleRad.value);
+            typesetMath();
+        });
+
+        onBeforeUnmount(() => {
+            if (toastTimer) clearTimeout(toastTimer);
+            if (gameAnimationId) cancelAnimationFrame(gameAnimationId);
+            if (simAnimationId) cancelAnimationFrame(simAnimationId);
+            window.removeEventListener('mathjax-ready', typesetMath);
+        });
+
+        return {
+            tabs, activeTab, changeTab, typesetMath,
+            toast,
+            sourceCards, draggedCard, isFiring, currentAngle, currentAngleForBarrel, gameTraces,
+            gameBallX, gameBallY, gameCurrentPath, tab1TargetX, dragStart, dropAngle, playAngle, resetTab1,
+            paramV0, paramAngle, keepTraces, isSimRunning, showLanded,
+            simTime, currentX, currentY, currentVx, currentVy, theoreticalT, theoreticalL, theoreticalH,
+            savedTraces, currentSvgPath, previewPath, svgX, svgY,
+            gridX, gridY, xMarks, yMarks, clearTraces, launchSimulation,
+            questions, selectOption, getLetterClass, getOptionClass, resetQuiz
+        };
+    }
+}).mount('#app');
+</script>
+</body>
+</html>
